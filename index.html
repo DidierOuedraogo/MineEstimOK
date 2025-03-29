@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MineEstim - Krigeage</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/dxf-parser@1.1.2/dist/dxf-parser.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.8.0/lib/browser/math.min.js"></script>
+    <style>
+        :root {
+            --primary: #3f51b5;
+            --secondary: #ff4081;
+            --background: #f8f9fa;
+            --card: #ffffff;
+            --text: #37474f;
+            --border: #e0e6ed;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --radius: 12px;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        
+        body { background-color: var(--background); color: var(--text); line-height: 1.6; }
+        
+        .container { width: 100%; max-width: 1500px; margin: 0 auto; padding: 20px; }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary), #303f9f);
+            color: white;
+            padding: 20px;
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            box-shadow: 0 10px 20px var(--shadow);
+        }
+        
+        h1 { font-size: 2rem; margin-bottom: 8px; }
+        h2 { font-size: 1.4rem; margin-bottom: 15px; color: var(--primary); }
+        h3 { font-size: 1.1rem; margin-bottom: 12px; }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        
+        @media (min-width: 992px) {
+            .grid { grid-template-columns: 340px 1fr; }
+        }
+        
+        .card {
+            background-color: var(--card);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px var(--shadow);
+        }
+        
+        .form-group { margin-bottom: 15px; }
+        
+        label { display: block; margin-bottom: 8px; font-weight: 500; }
+        
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, var(--primary), #303f9f);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .export-btn {
+            background: linear-gradient(135deg, #4caf50, #388e3c);
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 14px 20px;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            font-weight: 500;
+            color: #607d8b;
+        }
+        
+        .tab.active {
+            color: var(--primary);
+            font-weight: 600;
+            background-color: white;
+            border: 1px solid var(--border);
+            border-bottom: 2px solid white;
+            margin-bottom: -1px;
+        }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        #model3D, #statistics, #grade-tonnage-container {
+            width: 100%;
+            height: 600px;
+            border-radius: 8px;
+            background-color: #fff;
+            overflow: hidden;
+        }
+        
+        .hidden { display: none; }
+        
+        .alert {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+        }
+        
+        .alert-success {
+            background-color: rgba(76, 175, 80, 0.15);
+            color: #2e7d32;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .alert-danger {
+            background-color: rgba(244, 67, 54, 0.15);
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+        
+        .chart-container {
+            height: 350px;
+            margin-top: 20px;
+            padding: 8px;
+            border-radius: 8px;
+            background-color: white;
+        }
+        
+        .summary-row { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 20px; 
+            margin-bottom: 20px; 
+        }
+        
+        .summary-card { 
+            flex: 1; 
+            min-width: 200px; 
+            padding: 20px; 
+            background-color: white; 
+            border-radius: 8px; 
+            box-shadow: 0 5px 15px var(--shadow); 
+        }
+        
+        .summary-value { 
+            font-size: 1.8rem; 
+            font-weight: 700; 
+            color: var(--primary); 
+            margin-bottom: 8px; 
+        }
+        
+        .tip {
+            font-size: 0.85rem;
+            color: #607d8b;
+            font-style: italic;
+            margin-top: 8px;
+        }
+        
+        .loader {
+            border: 5px solid rgba(63, 81, 181, 0.1);
+            border-radius: 50%;
+            border-top: 5px solid var(--primary);
+            width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+        
+        .export-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: rgba(63, 81, 181, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .export-section h3 {
+            margin-bottom: 15px;
+            color: var(--primary);
+        }
+        
+        .export-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .variogram-model {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .variogram-param {
+            flex: 1;
+            min-width: 120px;
+        }
+        
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MineEstim <i class="fas fa-cubes"></i></h1>
+            <p>Estimation de ressources minérales par krigeage ordinaire</p>
+        </header>
+        
+        <div class="grid">
+            <div>
+                <div class="card">
+                    <h2><i class="fas fa-file-import"></i> Données</h2>
+                    
+                    <div class="form-group">
+                        <label for="composites">Fichier CSV des composites</label>
+                        <input type="file" id="composites" accept=".csv">
+                        <div id="composites-info">
+                            <i class="fas fa-info-circle"></i> Sélectionnez un fichier CSV
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-success hidden" id="file-loaded">
+                        <i class="fas fa-check-circle"></i> Fichier chargé avec succès!
+                    </div>
+                    <div class="alert alert-danger hidden" id="file-error">
+                        <i class="fas fa-exclamation-triangle"></i> Erreur lors du chargement du fichier.
+                    </div>
+                    
+                    <div class="hidden" id="column-mapping">
+                        <h3>Mappage des colonnes</h3>
+                        <div class="form-group">
+                            <label for="x-column">Colonne X</label>
+                            <select id="x-column"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="y-column">Colonne Y</label>
+                            <select id="y-column"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="z-column">Colonne Z</label>
+                            <select id="z-column"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="value-column">Colonne Teneur</label>
+                            <select id="value-column"></select>
+                        </div>
+                        
+                        <h3>Filtre (facultatif)</h3>
+                        <div class="form-group">
+                            <label for="domain-column">Colonne de domaine</label>
+                            <select id="domain-column">
+                                <option value="">-- Aucun --</option>
+                            </select>
+                        </div>
+                        
+                        <div id="domain-filters" class="hidden">
+                            <div class="form-group">
+                                <select id="domain-operator">
+                                    <option value="=">=</option>
+                                    <option value="!=">!=</option>
+                                    <option value="in">IN</option>
+                                    <option value="not-in">NOT IN</option>
+                                </select>
+                                <input type="text" id="domain-value" placeholder="Valeur(s)">
+                            </div>
+                        </div>
+                        
+                        <button id="apply-mapping"><i class="fas fa-check"></i> Appliquer</button>
+                        <button id="reset-mapping"><i class="fas fa-undo"></i> Réinitialiser</button>
+                    </div>
+                    
+                    <hr style="margin: 20px 0; border-top: 1px solid var(--border);">
+                    
+                    <div class="form-group">
+                        <label for="envelope">Enveloppe DXF (facultatif)</label>
+                        <input type="file" id="envelope" accept=".dxf">
+                        <div class="tip">
+                            <i class="fas fa-lightbulb"></i> L'enveloppe DXF doit contenir une entité fermée.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-success hidden" id="envelope-loaded">
+                        <i class="fas fa-check-circle"></i> Enveloppe chargée avec succès!
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; margin-top: 15px;">
+                        <label class="toggle-label" style="position: relative; display: inline-block; width: 50px; height: 24px; margin-right: 10px;">
+                            <input type="checkbox" id="use-envelope" checked style="opacity: 0; width: 0; height: 0;">
+                            <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px;"></span>
+                        </label>
+                        <span>Restreindre l'estimation à l'enveloppe</span>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2><i class="fas fa-chart-line"></i> Paramètres de krigeage</h2>
+                    
+                    <div class="form-group">
+                        <label for="variogram-model">Modèle de variogramme</label>
+                        <select id="variogram-model">
+                            <option value="spherical">Sphérique</option>
+                            <option value="exponential">Exponentiel</option>
+                            <option value="gaussian">Gaussien</option>
+                        </select>
+                    </div>
+                    
+                    <div class="variogram-model">
+                        <div class="variogram-param">
+                            <label for="nugget-effect">Effet pépite</label>
+                            <input type="number" id="nugget-effect" value="0" min="0" step="0.01">
+                        </div>
+                        <div class="variogram-param">
+                            <label for="sill">Palier</label>
+                            <input type="number" id="sill" value="1" min="0.01" step="0.01">
+                        </div>
+                        <div class="variogram-param">
+                            <label for="range">Portée</label>
+                            <input type="number" id="range" value="50" min="1" step="1">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Anisotropie (ratio des portées)</label>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">X</span>
+                                <input type="number" id="anisotropy-x" value="1" min="0.1" step="0.1">
+                            </div>
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">Y</span>
+                                <input type="number" id="anisotropy-y" value="1" min="0.1" step="0.1">
+                            </div>
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">Z</span>
+                                <input type="number" id="anisotropy-z" value="0.5" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2><i class="fas fa-cube"></i> Paramètres du modèle</h2>
+                    
+                    <div class="form-group">
+                        <label>Taille des blocs (m)</label>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">X</span>
+                                <input type="number" id="block-size-x" value="5" min="1">
+                            </div>
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">Y</span>
+                                <input type="number" id="block-size-y" value="5" min="1">
+                            </div>
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">Z</span>
+                                <input type="number" id="block-size-z" value="5" min="1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="density">Densité (t/m³)</label>
+                        <input type="number" id="density" value="2.7" min="0.1" step="0.1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Rayon de recherche (m)</label>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">X</span>
+                                <input type="number" id="search-radius-x" value="50" min="1">
+                            </div>
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">Y</span>
+                                <input type="number" id="search-radius-y" value="50" min="1">
+                            </div>
+                            <div>
+                                <span style="display: inline-block; width: 20px; text-align: center; font-weight: 600; color: var(--primary);">Z</span>
+                                <input type="number" id="search-radius-z" value="25" min="1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="min-samples">Nombre min d'échantillons</label>
+                        <input type="number" id="min-samples" value="3" min="3">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="max-samples">Nombre max d'échantillons</label>
+                        <input type="number" id="max-samples" value="16" min="3">
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <button id="create-model-btn">
+                        <i class="fas fa-cube"></i> Créer le modèle de blocs
+                    </button>
+                    <button id="estimate-btn" class="hidden">
+                        <i class="fas fa-calculator"></i> Estimer par krigeage
+                    </button>
+                    <div class="loader" id="estimation-loader"></div>
+                    
+                    <div class="export-section hidden" id="export-section">
+                        <h3><i class="fas fa-file-export"></i> Exporter</h3>
+                        <div class="export-options">
+                            <button id="export-model-csv" class="export-btn">
+                                <i class="fas fa-file-csv"></i> Modèle en CSV
+                            </button>
+                            <button id="export-3d-png" class="export-btn">
+                                <i class="fas fa-image"></i> Vue 3D en PNG
+                            </button>
+                            <button id="export-stats-pdf" class="export-btn">
+                                <i class="fas fa-file-pdf"></i> Statistiques en PDF
+                            </button>
+                            <button id="export-tonnage-xlsx" class="export-btn">
+                                <i class="fas fa-file-excel"></i> Tonnage-Teneur en Excel
+                            </button>
+                            <button id="export-tonnage-pdf" class="export-btn">
+                                <i class="fas fa-file-pdf"></i> Tonnage-Teneur en PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="tabs">
+                    <div class="tab active" data-tab="model">
+                        <i class="fas fa-cube"></i> Modèle 3D
+                    </div>
+                    <div class="tab" data-tab="stats">
+                        <i class="fas fa-chart-bar"></i> Statistiques
+                    </div>
+                    <div class="tab" data-tab="tonnage">
+                        <i class="fas fa-balance-scale"></i> Tonnage-Teneur
+                    </div>
+                    <div class="tab" data-tab="errors">
+                        <i class="fas fa-exclamation-triangle"></i> Erreurs
+                    </div>
+                </div>
+                
+                <div id="model-tab" class="tab-content active">
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
+                        <div style="padding: 8px 15px; background-color: rgba(63, 81, 181, 0.05); border-radius: 20px;">
+                            <input type="checkbox" id="show-composites" checked>
+                            <label for="show-composites">Composites</label>
+                        </div>
+                        <div style="padding: 8px 15px; background-color: rgba(63, 81, 181, 0.05); border-radius: 20px;">
+                            <input type="checkbox" id="show-empty-blocks">
+                            <label for="show-empty-blocks">Blocs vides</label>
+                        </div>
+                        <div style="padding: 8px 15px; background-color: rgba(63, 81, 181, 0.05); border-radius: 20px;">
+                            <input type="checkbox" id="show-estimated-blocks" checked>
+                            <label for="show-estimated-blocks">Blocs estimés</label>
+                        </div>
+                        <div style="padding: 8px 15px; background-color: rgba(63, 81, 181, 0.05); border-radius: 20px;">
+                            <input type="checkbox" id="show-envelope" checked>
+                            <label for="show-envelope">Enveloppe</label>
+                        </div>
+                    </div>
+                    <div id="model3D"></div>
+                </div>
+                
+                <div id="stats-tab" class="tab-content">
+                    <div class="summary-row hidden" id="summary-stats">
+                        <div class="summary-card">
+                            <div class="summary-value" id="total-blocks">0</div>
+                            <div>Nombre total de blocs</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="avg-grade">0.00</div>
+                            <div>Teneur moyenne</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="total-volume">0.00</div>
+                            <div>Volume total (m³)</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="total-tonnage">0.00</div>
+                            <div>Tonnage total (t)</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="card" style="margin-bottom: 0;">
+                            <h3><i class="fas fa-vial"></i> Statistiques des composites</h3>
+                            <table id="composite-stats" style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border);">Paramètre</th>
+                                    <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border);">Valeur</th>
+                                </tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Nombre d'échantillons</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Minimum</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Maximum</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Moyenne</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Médiane</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Écart-type</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">CV</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                            </table>
+                        </div>
+                        
+                        <div class="card" style="margin-bottom: 0;">
+                            <h3><i class="fas fa-cubes"></i> Statistiques du modèle de blocs</h3>
+                            <table id="block-stats" style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border);">Paramètre</th>
+                                    <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border);">Valeur</th>
+                                </tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Nombre de blocs</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Minimum</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Maximum</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Moyenne</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Médiane</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">Écart-type</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                                <tr><td style="padding: 10px; border-bottom: 1px solid var(--border);">CV</td><td style="padding: 10px; border-bottom: 1px solid var(--border);">0.00</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                        <div class="card" style="margin-bottom: 0;">
+                            <h3>Histogramme des composites</h3>
+                            <div class="chart-container">
+                                <canvas id="composite-histogram"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="card" style="margin-bottom: 0;">
+                            <h3>Histogramme du modèle de blocs</h3>
+                            <div class="chart-container">
+                                <canvas id="block-histogram"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="tonnage-tab" class="tab-content">
+                    <div style="padding: 20px; background-color: white; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; box-shadow: 0 3px 10px var(--shadow);">
+                        <div>
+                            <label for="cutoff-method">Méthode de coupure:</label>
+                            <select id="cutoff-method">
+                                <option value="above">Teneur ≥ Coupure</option>
+                                <option value="below">Teneur ≤ Coupure</option>
+                                <option value="between">Entre deux teneurs</option>
+                            </select>
+                        </div>
+                        
+                        <div id="cutoff-single">
+                            <label for="cutoff-value">Teneur de coupure:</label>
+                            <input type="number" id="cutoff-value" value="0.5" min="0" step="0.1" style="width: 100px;">
+                        </div>
+                        
+                        <div id="cutoff-range" class="hidden">
+                            <label for="cutoff-min">Min:</label>
+                            <input type="number" id="cutoff-min" value="0.5" min="0" step="0.1" style="width: 80px;">
+                            <label for="cutoff-max">Max:</label>
+                            <input type="number" id="cutoff-max" value="1.0" min="0" step="0.1" style="width: 80px;">
+                        </div>
+                        
+                        <div>
+                            <button id="calculate-tonnage">
+                                <i class="fas fa-calculator"></i> Calculer
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="card" style="margin-bottom: 0;">
+                            <h3>Courbe Tonnage-Teneur</h3>
+                            <div class="chart-container">
+                                <canvas id="tonnage-grade-chart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="card" style="margin-bottom: 0;">
+                            <h3>Métal contenu</h3>
+                            <div class="chart-container">
+                                <canvas id="metal-content-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card" style="margin-top: 20px;">
+                        <h3>Résultats détaillés</h3>
+                        <div id="tonnage-results" style="max-height: 300px; overflow-y: auto;">
+                            <table id="tonnage-table" style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr>
+                                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border);">Coupure</th>
+                                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border);">Tonnage (t)</th>
+                                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border);">Teneur moyenne</th>
+                                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border);">Métal contenu</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Tableau dynamique -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="errors-tab" class="tab-content">
+                    <div class="summary-row hidden" id="error-stats">
+                        <div class="summary-card">
+                            <div class="summary-value" id="avg-error">0.00</div>
+                            <div>Erreur moyenne</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="avg-stddev">0.00</div>
+                            <div>Écart-type d'erreur (σ)</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="avg-kriging-variance">0.00</div>
+                            <div>Variance de krigeage moyenne</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Distribution des erreurs d'estimation</h3>
+                        <div class="chart-container">
+                            <canvas id="error-histogram"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card" style="margin-top: 20px;">
+                        <h3>Variance de krigeage</h3>
+                        <div class="chart-container">
+                            <canvas id="kriging-variance-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Variables globales
+        let rawComposites = [], composites = [], csvColumns = [];
+        let emptyBlockModel = [], blockModel = [];
+        let blockModelPlot, emptyBlocksPlot, compositesPlot, envelopePlot;
+        let compositeHistogram, blockHistogram, tonnageGradeChart, metalContentChart;
+        let errorHistogram, krigingVarianceChart;
+        let envelopeMesh, envelopeBoundingBox;
+        let columnMapping = { x: null, y: null, z: null, value: null, domain: null };
+        let tonnageGradeData = { cutoffs: [], tonnages: [], grades: [], metals: [] };
+        let variogramModel = {
+            type: 'spherical',
+            nugget: 0,
+            sill: 1,
+            range: 50,
+            anisotropy: { x: 1, y: 1, z: 0.5 }
+        };
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            // Onglets
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    this.classList.add('active');
+                    document.getElementById(`${this.dataset.tab}-tab`).classList.add('active');
+                });
+            });
+            
+            // Fichiers
+            document.getElementById('composites').addEventListener('change', loadCompositesFile);
+            document.getElementById('envelope').addEventListener('change', loadEnvelopeDXF);
+            
+            // Mappage colonnes
+            document.getElementById('domain-column').addEventListener('change', toggleDomainFilters);
+            document.getElementById('apply-mapping').addEventListener('click', applyColumnMapping);
+            document.getElementById('reset-mapping').addEventListener('click', resetColumnMapping);
+            
+            // Contrôles visualisation
+            document.getElementById('show-composites').addEventListener('change', updateVisualization);
+            document.getElementById('show-empty-blocks').addEventListener('change', updateVisualization);
+            document.getElementById('show-estimated-blocks').addEventListener('change', updateVisualization);
+            document.getElementById('show-envelope').addEventListener('change', updateVisualization);
+            
+            // Variogramme
+            document.getElementById('variogram-model').addEventListener('change', updateVariogramModel);
+            document.getElementById('nugget-effect').addEventListener('change', updateVariogramModel);
+            document.getElementById('sill').addEventListener('change', updateVariogramModel);
+            document.getElementById('range').addEventListener('change', updateVariogramModel);
+            document.getElementById('anisotropy-x').addEventListener('change', updateVariogramModel);
+            document.getElementById('anisotropy-y').addEventListener('change', updateVariogramModel);
+            document.getElementById('anisotropy-z').addEventListener('change', updateVariogramModel);
+            
+            // Cutoff
+            document.getElementById('cutoff-method').addEventListener('change', toggleCutoffInputs);
+            document.getElementById('calculate-tonnage').addEventListener('click', calculateTonnageGrade);
+            
+            // Actions principales
+            document.getElementById('create-model-btn').addEventListener('click', createEmptyBlockModel);
+            document.getElementById('estimate-btn').addEventListener('click', estimateBlockModel);
+            
+            // Export
+            document.getElementById('export-model-csv').addEventListener('click', exportModelCSV);
+            document.getElementById('export-3d-png').addEventListener('click', export3DPNG);
+            document.getElementById('export-stats-pdf').addEventListener('click', exportStatsPDF);
+            document.getElementById('export-tonnage-xlsx').addEventListener('click', exportTonnageXLSX);
+            document.getElementById('export-tonnage-pdf').addEventListener('click', exportTonnagePDF);
+            
+            // Initialisation du variogramme
+            updateVariogramModel();
+        });
+        
+        // Chargement des composites
+        function loadCompositesFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('composites-info').innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Chargement...`;
+            
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    if (results.errors.length > 0) {
+                        showError("Erreur lors du chargement du fichier");
+                        return;
+                    }
+                    
+                    rawComposites = results.data.filter(row => Object.values(row).some(val => val !== null));
+                    csvColumns = results.meta.fields || [];
+                    
+                    showSuccess(`${rawComposites.length} lignes chargées`);
+                    document.getElementById('composites-info').innerHTML = `<i class="fas fa-file-alt"></i> ${file.name}`;
+                    
+                    setupColumnMapping();
+                }
+            });
+        }
+        
+        function setupColumnMapping() {
+            document.getElementById('column-mapping').classList.remove('hidden');
+            populateColumnSelects();
+            autoDetectColumns();
+        }
+        
+        function populateColumnSelects() {
+            ['x-column', 'y-column', 'z-column', 'value-column'].forEach(id => {
+                const select = document.getElementById(id);
+                select.innerHTML = '';
+                csvColumns.forEach(col => select.appendChild(new Option(col, col)));
+            });
+            
+            const domainSelect = document.getElementById('domain-column');
+            domainSelect.innerHTML = '<option value="">-- Aucun --</option>';
+            csvColumns.forEach(col => domainSelect.appendChild(new Option(col, col)));
+        }
+        
+        function autoDetectColumns() {
+            const xColumn = csvColumns.find(col => /^[xX]$/.test(col));
+            const yColumn = csvColumns.find(col => /^[yY]$/.test(col));
+            const zColumn = csvColumns.find(col => /^[zZ]$/.test(col));
+            const valueColumn = csvColumns.find(col => /^(VALUE|TENEUR|GRADE|AU|CU|ZN|PB|AG)$/i.test(col));
+            const domainColumn = csvColumns.find(col => /^(DOMAIN|DOMAINE|ZONE|LITHOLOGY|LITHO|GEOLOGY|GEO)$/i.test(col));
+            
+            if (xColumn) { document.getElementById('x-column').value = xColumn; columnMapping.x = xColumn; }
+            if (yColumn) { document.getElementById('y-column').value = yColumn; columnMapping.y = yColumn; }
+            if (zColumn) { document.getElementById('z-column').value = zColumn; columnMapping.z = zColumn; }
+            if (valueColumn) { document.getElementById('value-column').value = valueColumn; columnMapping.value = valueColumn; }
+            if (domainColumn) {
+                document.getElementById('domain-column').value = domainColumn;
+                columnMapping.domain = domainColumn;
+                toggleDomainFilters();
+            }
+        }
+        
+        function toggleDomainFilters() {
+            const domainColumn = document.getElementById('domain-column').value;
+            document.getElementById('domain-filters').classList.toggle('hidden', !domainColumn);
+            columnMapping.domain = domainColumn || null;
+        }
+        
+        function applyColumnMapping() {
+            const x = document.getElementById('x-column').value;
+            const y = document.getElementById('y-column').value;
+            const z = document.getElementById('z-column').value;
+            const value = document.getElementById('value-column').value;
+            
+            if (!x || !y || !z || !value) {
+                alert("Veuillez sélectionner les colonnes X, Y, Z et Teneur.");
+                return;
+            }
+            
+            columnMapping = { 
+                x, y, z, value, 
+                domain: document.getElementById('domain-column').value || null 
+            };
+            
+            composites = rawComposites.map(row => ({
+                X: row[columnMapping.x],
+                Y: row[columnMapping.y],
+                Z: row[columnMapping.z],
+                VALUE: row[columnMapping.value],
+                DOMAIN: columnMapping.domain ? row[columnMapping.domain] : null
+            })).filter(comp => comp.X !== null && comp.Y !== null && comp.Z !== null && comp.VALUE !== null);
+            
+            if (columnMapping.domain) {
+                const operator = document.getElementById('domain-operator').value;
+                const filterValue = document.getElementById('domain-value').value.trim();
+                
+                if (filterValue) {
+                    const filterValues = filterValue.split(',').map(v => v.trim());
+                    
+                    composites = composites.filter(comp => {
+                        const domainValue = comp.DOMAIN !== null ? comp.DOMAIN.toString() : '';
+                        
+                        switch (operator) {
+                            case '=': return domainValue === filterValue;
+                            case '!=': return domainValue !== filterValue;
+                            case 'in': return filterValues.includes(domainValue);
+                            case 'not-in': return !filterValues.includes(domainValue);
+                            default: return true;
+                        }
+                    });
+                }
+            }
+            
+            updateCompositeStats();
+            visualizeComposites();
+            
+            document.getElementById('column-mapping').classList.add('hidden');
+            showSuccess(`${composites.length} composites chargés avec succès!`);
+        }
+        
+        function resetColumnMapping() {
+            ['x-column', 'y-column', 'z-column', 'value-column', 'domain-column'].forEach(id => {
+                document.getElementById(id).selectedIndex = 0;
+            });
+            
+            document.getElementById('domain-filters').classList.add('hidden');
+            document.getElementById('domain-operator').value = '=';
+            document.getElementById('domain-value').value = '';
+            
+            columnMapping = { x: null, y: null, z: null, value: null, domain: null };
+            autoDetectColumns();
+        }
+        
+        // Enveloppe DXF
+        function loadEnvelopeDXF(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const parser = new DxfParser();
+                    const dxf = parser.parseSync(e.target.result);
+                    const entities = extractDXFEntities(dxf);
+                    
+                    if (entities.length === 0) {
+                        showError("Aucune entité 3D valide trouvée dans le fichier DXF.");
+                        return;
+                    }
+                    
+                    envelopeMesh = buildEnvelopeMesh(entities);
+                    envelopeBoundingBox = calculateBoundingBox(envelopeMesh);
+                    
+                    document.getElementById('envelope-loaded').innerHTML = 
+                        `<i class="fas fa-check-circle"></i> Enveloppe chargée (${entities.length} entités)`;
+                    document.getElementById('envelope-loaded').classList.remove('hidden');
+                    
+                    visualizeEnvelope();
+                } catch (error) {
+                    showError("Erreur lors du chargement du fichier DXF: " + error.message);
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        function extractDXFEntities(dxf) {
+            const entities = [];
+            
+            if (!dxf.entities || !Array.isArray(dxf.entities)) return entities;
+            
+            for (const entity of dxf.entities) {
+                if (entity.type === '3DFACE') {
+                    entities.push({
+                        type: '3DFACE',
+                        vertices: entity.vertices.map(v => ({ x: v.x, y: v.y, z: v.z }))
+                    });
+                } else if (entity.type === 'POLYLINE' && entity.vertices && entity.vertices.length >= 3) {
+                    entities.push({
+                        type: 'POLYLINE',
+                        vertices: entity.vertices.map(v => ({ x: v.x || 0, y: v.y || 0, z: v.z || 0 })),
+                        closed: true
+                    });
+                } else if (entity.type === 'MESH') {
+                    entities.push({
+                        type: 'MESH',
+                        vertices: entity.vertices.map(v => ({ x: v.x, y: v.y, z: v.z })),
+                        faces: entity.faces
+                    });
+                }
+            }
+            
+            return entities;
+        }
+        
+        function buildEnvelopeMesh(entities) {
+            const mesh = { vertices: [], faces: [] };
+            
+            entities.forEach(entity => {
+                const startIndex = mesh.vertices.length;
+                
+                if (entity.type === '3DFACE') {
+                    entity.vertices.forEach(vertex => mesh.vertices.push(vertex));
+                    mesh.faces.push([startIndex, startIndex + 1, startIndex + 2]);
+                    mesh.faces.push([startIndex, startIndex + 2, startIndex + 3]);
+                } else if (entity.type === 'POLYLINE' && entity.closed) {
+                    entity.vertices.forEach(vertex => mesh.vertices.push(vertex));
+                    for (let i = 1; i < entity.vertices.length - 1; i++) {
+                        mesh.faces.push([startIndex, startIndex + i, startIndex + i + 1]);
+                    }
+                } else if (entity.type === 'MESH') {
+                    entity.vertices.forEach(vertex => mesh.vertices.push(vertex));
+                    entity.faces.forEach(face => {
+                        mesh.faces.push(face.map(i => startIndex + i));
+                    });
+                }
+            });
+            
+            return mesh;
+        }
+        
+        function calculateBoundingBox(mesh) {
+            if (!mesh || mesh.vertices.length === 0) return null;
+            
+            let minX = Infinity, minY = Infinity, minZ = Infinity;
+            let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+            
+            mesh.vertices.forEach(vertex => {
+                minX = Math.min(minX, vertex.x);
+                minY = Math.min(minY, vertex.y);
+                minZ = Math.min(minZ, vertex.z);
+                maxX = Math.max(maxX, vertex.x);
+                maxY = Math.max(maxY, vertex.y);
+                maxZ = Math.max(maxZ, vertex.z);
+            });
+            
+            return {
+                min: { x: minX, y: minY, z: minZ },
+                max: { x: maxX, y: maxY, z: maxZ }
+            };
+        }
+        
+        function isPointInsideMesh(point, mesh) {
+            if (!mesh || mesh.vertices.length === 0 || mesh.faces.length === 0) return true;
+            
+            // Vérification rapide avec la bounding box
+            if (envelopeBoundingBox) {
+                if (point.x < envelopeBoundingBox.min.x || point.x > envelopeBoundingBox.max.x ||
+                    point.y < envelopeBoundingBox.min.y || point.y > envelopeBoundingBox.max.y ||
+                    point.z < envelopeBoundingBox.min.z || point.z > envelopeBoundingBox.max.z) {
+                    return false;
+                }
+            }
+            
+            // Ray casting
+            const rayDir = { x: 1, y: 0.1, z: 0.1 };
+            let intersections = 0;
+            
+            for (const face of mesh.faces) {
+                if (face.length < 3) continue;
+                
+                const v0 = mesh.vertices[face[0]];
+                const v1 = mesh.vertices[face[1]];
+                const v2 = mesh.vertices[face[2]];
+                
+                if (rayIntersectsTriangle(point, rayDir, v0, v1, v2)) {
+                    intersections++;
+                }
+            }
+            
+            return intersections % 2 === 1;
+        }
+        
+        function rayIntersectsTriangle(origin, dir, v0, v1, v2) {
+            const EPSILON = 0.0000001;
+            
+            const edge1 = { x: v1.x - v0.x, y: v1.y - v0.y, z: v1.z - v0.z };
+            const edge2 = { x: v2.x - v0.x, y: v2.y - v0.y, z: v2.z - v0.z };
+            
+            const h = {
+                x: dir.y * edge2.z - dir.z * edge2.y,
+                y: dir.z * edge2.x - dir.x * edge2.z,
+                z: dir.x * edge2.y - dir.y * edge2.x
+            };
+            
+            const a = edge1.x * h.x + edge1.y * h.y + edge1.z * h.z;
+            if (a > -EPSILON && a < EPSILON) return false;
+            
+            const f = 1.0 / a;
+            const s = { x: origin.x - v0.x, y: origin.y - v0.y, z: origin.z - v0.z };
+            const u = f * (s.x * h.x + s.y * h.y + s.z * h.z);
+            
+            if (u < 0.0 || u > 1.0) return false;
+            
+            const q = {
+                x: s.y * edge1.z - s.z * edge1.y,
+                y: s.z * edge1.x - s.x * edge1.z,
+                z: s.x * edge1.y - s.y * edge1.x
+            };
+            
+            const v = f * (dir.x * q.x + dir.y * q.y + dir.z * q.z);
+            if (v < 0.0 || u + v > 1.0) return false;
+            
+            const t = f * (edge2.x * q.x + edge2.y * q.y + edge2.z * q.z);
+            return t > EPSILON;
+        }
+        
+        function visualizeEnvelope() {
+            if (!envelopeMesh || envelopeMesh.vertices.length === 0) return;
+            
+            const vertices = envelopeMesh.vertices;
+            const faces = envelopeMesh.faces;
+            
+            const triangleX = [];
+            const triangleY = [];
+            const triangleZ = [];
+            
+            faces.forEach(face => {
+                if (face.length >= 3) {
+                    const v0 = vertices[face[0]];
+                    const v1 = vertices[face[1]];
+                    const v2 = vertices[face[2]];
+                    
+                    triangleX.push(v0.x, v1.x, v2.x, null);
+                    triangleY.push(v0.y, v1.y, v2.y, null);
+                    triangleZ.push(v0.z, v1.z, v2.z, null);
+                }
+            });
+            
+            envelopePlot = {
+                type: 'scatter3d',
+                mode: 'lines',
+                x: triangleX,
+                y: triangleY,
+                z: triangleZ,
+                line: { color: 'rgba(76, 175, 80, 0.5)', width: 1 },
+                name: 'Enveloppe'
+            };
+            
+            updateVisualization();
+        }
+        
+        // Variogramme
+        function updateVariogramModel() {
+            variogramModel = {
+                type: document.getElementById('variogram-model').value,
+                nugget: parseFloat(document.getElementById('nugget-effect').value),
+                sill: parseFloat(document.getElementById('sill').value),
+                range: parseFloat(document.getElementById('range').value),
+                anisotropy: {
+                    x: parseFloat(document.getElementById('anisotropy-x').value),
+                    y: parseFloat(document.getElementById('anisotropy-y').value),
+                    z: parseFloat(document.getElementById('anisotropy-z').value)
+                }
+            };
+        }
+        
+        function calculateVariogramValue(distance, model) {
+            if (distance === 0) return 0;
+            
+            const nugget = model.nugget;
+            const sill = model.sill;
+            const range = model.range;
+            const normalizedDistance = distance / range;
+            
+            if (normalizedDistance >= 1) return nugget + sill;
+            
+            let structuralComponent = 0;
+            
+            switch (model.type) {
+                case 'spherical':
+                    structuralComponent = sill * (1.5 * normalizedDistance - 0.5 * Math.pow(normalizedDistance, 3));
+                    break;
+                    
+                case 'exponential':
+                    structuralComponent = sill * (1 - Math.exp(-3 * normalizedDistance));
+                    break;
+                    
+                case 'gaussian':
+                    structuralComponent = sill * (1 - Math.exp(-3 * Math.pow(normalizedDistance, 2)));
+                    break;
+                    
+                default:
+                    structuralComponent = sill * normalizedDistance; // Linéaire
+            }
+            
+            return nugget + structuralComponent;
+        }
+        
+        // Statistiques et Visualisation
+        function updateCompositeStats() {
+            if (composites.length === 0) return;
+            
+            const values = composites.map(c => c.VALUE);
+            const stats = calculateStats(values);
+            
+            const table = document.getElementById('composite-stats');
+            table.rows[1].cells[1].textContent = stats.count;
+            table.rows[2].cells[1].textContent = stats.min.toFixed(3);
+            table.rows[3].cells[1].textContent = stats.max.toFixed(3);
+            table.rows[4].cells[1].textContent = stats.mean.toFixed(3);
+            table.rows[5].cells[1].textContent = stats.median.toFixed(3);
+            table.rows[6].cells[1].textContent = stats.stdDev.toFixed(3);
+            table.rows[7].cells[1].textContent = stats.cv.toFixed(3);
+            
+            updateHistogram('composite-histogram', values, 'Composites');
+        }
+        
+        function calculateStats(values) {
+            if (values.length === 0) return {};
+            
+            const sortedValues = [...values].sort((a, b) => a - b);
+            const sum = values.reduce((a, b) => a + b, 0);
+            const count = values.length;
+            const mean = sum / count;
+            
+            let median;
+            if (count % 2 === 0) {
+                median = (sortedValues[count / 2 - 1] + sortedValues[count / 2]) / 2;
+            } else {
+                median = sortedValues[Math.floor(count / 2)];
+            }
+            
+            const variance = values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / count;
+            const stdDev = Math.sqrt(variance);
+            
+            return {
+                count,
+                min: Math.min(...values),
+                max: Math.max(...values),
+                mean,
+                median,
+                stdDev,
+                cv: stdDev / mean
+            };
+        }
+        
+        function updateHistogram(canvasId, values, label) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const range = max - min;
+            
+            const numBins = Math.ceil(1 + 3.322 * Math.log10(values.length));
+            const binWidth = range / numBins;
+            
+            const bins = Array(numBins).fill(0);
+            const binLabels = [];
+            
+            for (let i = 0; i < numBins; i++) {
+                const binStart = min + i * binWidth;
+                const binEnd = min + (i + 1) * binWidth;
+                binLabels.push(`${binStart.toFixed(2)}-${binEnd.toFixed(2)}`);
+            }
+            
+            values.forEach(value => {
+                if (value === max) {
+                    bins[numBins - 1]++;
+                } else {
+                    const binIndex = Math.floor((value - min) / binWidth);
+                    bins[binIndex]++;
+                }
+            });
+            
+            if (canvasId === 'composite-histogram' && compositeHistogram) {
+                compositeHistogram.destroy();
+            } else if (canvasId === 'block-histogram' && blockHistogram) {
+                blockHistogram.destroy();
+            } else if (canvasId === 'error-histogram' && errorHistogram) {
+                errorHistogram.destroy();
+            }
+            
+            const backgroundColor = canvasId === 'composite-histogram' ? 
+                'rgba(63, 81, 181, 0.6)' : canvasId === 'block-histogram' ?
+                'rgba(0, 188, 212, 0.6)' : 'rgba(255, 64, 129, 0.6)';
+                
+            const borderColor = canvasId === 'composite-histogram' ? 
+                'rgba(63, 81, 181, 1)' : canvasId === 'block-histogram' ?
+                'rgba(0, 188, 212, 1)' : 'rgba(255, 64, 129, 1)';
+            
+            const histogramChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: binLabels,
+                    datasets: [{
+                        label: label,
+                        data: bins,
+                        backgroundColor: backgroundColor,
+                        borderColor: borderColor,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Fréquence' }
+                        },
+                        x: {
+                            title: { display: true, text: canvasId === 'error-histogram' ? 'Erreur' : 'Teneur' }
+                        }
+                    }
+                }
+            });
+            
+            if (canvasId === 'composite-histogram') {
+                compositeHistogram = histogramChart;
+            } else if (canvasId === 'block-histogram') {
+                blockHistogram = histogramChart;
+            } else if (canvasId === 'error-histogram') {
+                errorHistogram = histogramChart;
+            }
+        }
+        
+        function visualizeComposites() {
+            if (composites.length === 0) return;
+            
+            const x = composites.map(c => c.X);
+            const y = composites.map(c => c.Y);
+            const z = composites.map(c => c.Z);
+            const values = composites.map(c => c.VALUE);
+            
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const colors = values.map(value => getColorFromValue(value, min, max));
+            
+            compositesPlot = {
+                type: 'scatter3d',
+                mode: 'markers',
+                x: x,
+                y: y,
+                z: z,
+                marker: {
+                    size: 3.5,
+                    color: colors,
+                    opacity: 0.8
+                },
+                text: values.map(v => `Teneur: ${v.toFixed(3)}`),
+                hoverinfo: 'text',
+                name: 'Composites'
+            };
+            
+            document.getElementById('create-model-btn').classList.remove('hidden');
+            
+            updateVisualization();
+        }
+        
+        function getColorFromValue(value, min, max) {
+            const ratio = (value - min) / (max - min);
+            
+            let r, g, b;
+            
+            if (ratio < 0.25) {
+                const t = ratio / 0.25;
+                r = Math.round(30 * (1 - t) + 0 * t);
+                g = Math.round(60 * (1 - t) + 130 * t);
+                b = Math.round(110 * (1 - t) + 180 * t);
+            } else if (ratio < 0.5) {
+                const t = (ratio - 0.25) / 0.25;
+                r = Math.round(0 * (1 - t) + 0 * t);
+                g = Math.round(130 * (1 - t) + 179 * t);
+                b = Math.round(180 * (1 - t) + 70 * t);
+            } else if (ratio < 0.75) {
+                const t = (ratio - 0.5) / 0.25;
+                r = Math.round(0 * (1 - t) + 230 * t);
+                g = Math.round(179 * (1 - t) + 210 * t);
+                b = Math.round(70 * (1 - t) + 20 * t);
+            } else {
+                const t = (ratio - 0.75) / 0.25;
+                r = Math.round(230 * (1 - t) + 240 * t);
+                g = Math.round(210 * (1 - t) + 30 * t);
+                b = Math.round(20 * (1 - t) + 20 * t);
+            }
+            
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        
+        // Création du modèle et estimation
+        function createEmptyBlockModel() {
+            if (composites.length === 0) {
+                alert("Veuillez d'abord charger des composites.");
+                return;
+            }
+            
+            document.getElementById('estimation-loader').style.display = 'block';
+            
+            const useEnvelope = document.getElementById('use-envelope').checked && envelopeMesh !== null;
+            
+            const blockSizeX = parseFloat(document.getElementById('block-size-x').value);
+            const blockSizeY = parseFloat(document.getElementById('block-size-y').value);
+            const blockSizeZ = parseFloat(document.getElementById('block-size-z').value);
+            
+            let xMin, xMax, yMin, yMax, zMin, zMax;
+            
+            if (useEnvelope && envelopeBoundingBox) {
+                xMin = Math.floor(envelopeBoundingBox.min.x / blockSizeX) * blockSizeX;
+                xMax = Math.ceil(envelopeBoundingBox.max.x / blockSizeX) * blockSizeX;
+                yMin = Math.floor(envelopeBoundingBox.min.y / blockSizeY) * blockSizeY;
+                yMax = Math.ceil(envelopeBoundingBox.max.y / blockSizeY) * blockSizeY;
+                zMin = Math.floor(envelopeBoundingBox.min.z / blockSizeZ) * blockSizeZ;
+                zMax = Math.ceil(envelopeBoundingBox.max.z / blockSizeZ) * blockSizeZ;
+            } else {
+                const xValues = composites.map(c => c.X);
+                const yValues = composites.map(c => c.Y);
+                const zValues = composites.map(c => c.Z);
+                
+                xMin = Math.floor(Math.min(...xValues) / blockSizeX) * blockSizeX;
+                xMax = Math.ceil(Math.max(...xValues) / blockSizeX) * blockSizeX;
+                yMin = Math.floor(Math.min(...yValues) / blockSizeY) * blockSizeY;
+                yMax = Math.ceil(Math.max(...yValues) / blockSizeY) * blockSizeY;
+                zMin = Math.floor(Math.min(...zValues) / blockSizeZ) * blockSizeZ;
+                zMax = Math.ceil(Math.max(...zValues) / blockSizeZ) * blockSizeZ;
+            }
+            
+            emptyBlockModel = [];
+            
+            setTimeout(() => {
+                const totalXBlocks = Math.ceil((xMax - xMin) / blockSizeX);
+                const totalYBlocks = Math.ceil((yMax - yMin) / blockSizeY);
+                const totalZBlocks = Math.ceil((zMax - zMin) / blockSizeZ);
+                
+                for (let xIndex = 0; xIndex < totalXBlocks; xIndex++) {
+                    for (let yIndex = 0; yIndex < totalYBlocks; yIndex++) {
+                        for (let zIndex = 0; zIndex < totalZBlocks; zIndex++) {
+                            const x = xMin + xIndex * blockSizeX + blockSizeX / 2;
+                            const y = yMin + yIndex * blockSizeY + blockSizeY / 2;
+                            const z = zMin + zIndex * blockSizeZ + blockSizeZ / 2;
+                            
+                            if (useEnvelope && !isPointInsideMesh({ x, y, z }, envelopeMesh)) {
+                                continue;
+                            }
+                            
+                            emptyBlockModel.push({
+                                x, y, z,
+                                sizeX: blockSizeX,
+                                sizeY: blockSizeY,
+                                sizeZ: blockSizeZ
+                            });
+                        }
+                    }
+                }
+                
+                visualizeEmptyBlockModel();
+                document.getElementById('estimation-loader').style.display = 'none';
+                document.getElementById('estimate-btn').classList.remove('hidden');
+                document.getElementById('create-model-btn').classList.add('hidden');
+            }, 100);
+        }
+        
+        function visualizeEmptyBlockModel() {
+            if (emptyBlockModel.length === 0) return;
+            
+            const x = emptyBlockModel.map(b => b.x);
+            const y = emptyBlockModel.map(b => b.y);
+            const z = emptyBlockModel.map(b => b.z);
+            
+            emptyBlocksPlot = {
+                type: 'scatter3d',
+                mode: 'markers',
+                x: x,
+                y: y,
+                z: z,
+                marker: {
+                    size: 4,
+                    color: 'rgba(200, 200, 200, 0.5)',
+                    symbol: 'square',
+                    opacity: 0.5
+                },
+                text: emptyBlockModel.map(b => `Bloc: (${b.x.toFixed(1)}, ${b.y.toFixed(1)}, ${b.z.toFixed(1)})`),
+                hoverinfo: 'text',
+                name: 'Blocs vides'
+            };
+            
+            document.getElementById('show-empty-blocks').checked = true;
+            updateVisualization();
+        }
+        
+        function estimateBlockModel() {
+            if (composites.length === 0 || emptyBlockModel.length === 0) {
+                alert("Veuillez d'abord créer le modèle de blocs.");
+                return;
+            }
+            
+            document.getElementById('estimation-loader').style.display = 'block';
+            
+            const searchRadiusX = parseFloat(document.getElementById('search-radius-x').value);
+            const searchRadiusY = parseFloat(document.getElementById('search-radius-y').value);
+            const searchRadiusZ = parseFloat(document.getElementById('search-radius-z').value);
+            const minSamples = parseInt(document.getElementById('min-samples').value);
+            const maxSamples = parseInt(document.getElementById('max-samples').value);
+            
+            blockModel = [];
+            let krigingErrors = [];
+            let krigingVariances = [];
+            
+            // Traitement par lots
+            const batchSize = 100;
+            const totalBlocks = emptyBlockModel.length;
+            let processedBlocks = 0;
+            
+            function processBatch(startIndex) {
+                const endIndex = Math.min(startIndex + batchSize, totalBlocks);
+                
+                for (let i = startIndex; i < endIndex; i++) {
+                    const block = emptyBlockModel[i];
+                    
+                    // Recherche des échantillons pour le krigeage
+                    const samples = [];
+                    
+                    for (const composite of composites) {
+                        // Appliquer l'anisotropie
+                        const dx = (composite.X - block.x) / variogramModel.anisotropy.x;
+                        const dy = (composite.Y - block.y) / variogramModel.anisotropy.y;
+                        const dz = (composite.Z - block.z) / variogramModel.anisotropy.z;
+                        
+                        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                        
+                        if (dx <= searchRadiusX && dy <= searchRadiusY && dz <= searchRadiusZ) {
+                            samples.push({
+                                x: composite.X,
+                                y: composite.Y,
+                                z: composite.Z,
+                                value: composite.VALUE,
+                                distance: distance
+                            });
+                        }
+                    }
+                    
+                    samples.sort((a, b) => a.distance - b.distance);
+                    
+                    if (samples.length >= minSamples) {
+                        const usedSamples = samples.slice(0, Math.min(samples.length, maxSamples));
+                        
+                        // Krigeage ordinaire
+                        const result = ordinaryKriging(block, usedSamples, variogramModel);
+                        
+                        blockModel.push({
+                            x: block.x,
+                            y: block.y,
+                            z: block.z,
+                            value: result.estimate,
+                            variance: result.variance,
+                            sizeX: block.sizeX,
+                            sizeY: block.sizeY,
+                            sizeZ: block.sizeZ
+                        });
+                        
+                        // Si nous avons un échantillon au même endroit, calculer l'erreur
+                        const closeSample = samples.find(s => s.distance < 0.0001);
+                        if (closeSample) {
+                            krigingErrors.push(result.estimate - closeSample.value);
+                        }
+                        
+                        krigingVariances.push(result.variance);
+                    }
+                }
+                
+                processedBlocks = endIndex;
+                
+                if (processedBlocks < totalBlocks) {
+                    setTimeout(() => processBatch(processedBlocks), 0);
+                } else {
+                    visualizeEstimatedBlockModel();
+                    updateBlockStats();
+                    updateErrorStats(krigingErrors, krigingVariances);
+                    document.getElementById('estimation-loader').style.display = 'none';
+                    document.getElementById('summary-stats').classList.remove('hidden');
+                    document.getElementById('error-stats').classList.remove('hidden');
+                    document.getElementById('show-estimated-blocks').checked = true;
+                    document.getElementById('export-section').classList.remove('hidden');
+                }
+            }
+            
+            setTimeout(() => processBatch(0), 100);
+        }
+        
+        function ordinaryKriging(point, samples, model) {
+            if (samples.length === 0) return { estimate: 0, variance: 0 };
+            
+            // Si un seul échantillon, retourner sa valeur
+            if (samples.length === 1) {
+                return { estimate: samples[0].value, variance: model.nugget + model.sill };
+            }
+            
+            const n = samples.length;
+            
+            // Matrice de covariance entre échantillons
+            const K = math.zeros(n + 1, n + 1);
+            
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    if (i === j) {
+                        K.set([i, j], model.nugget);
+                    } else {
+                        // Distance entre échantillons
+                        const dx = (samples[i].x - samples[j].x) / model.anisotropy.x;
+                        const dy = (samples[i].y - samples[j].y) / model.anisotropy.y;
+                        const dz = (samples[i].z - samples[j].z) / model.anisotropy.z;
+                        
+                        const h = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                        
+                        // Covariance = palier - semivariance
+                        const semivariance = calculateVariogramValue(h, model);
+                        const cov = model.nugget + model.sill - semivariance;
+                        
+                        K.set([i, j], cov);
+                    }
+                }
+                
+                // Contrainte de biais nul
+                K.set([i, n], 1);
+                K.set([n, i], 1);
+            }
+            
+            // Aucun biais sur le multiplicateur de Lagrange
+            K.set([n, n], 0);
+            
+            // Vecteur de covariance entre le point à estimer et les échantillons
+            const k = math.zeros(n + 1, 1);
+            
+            for (let i = 0; i < n; i++) {
+                // Distance entre le point à estimer et l'échantillon
+                const dx = (point.x - samples[i].x) / model.anisotropy.x;
+                const dy = (point.y - samples[i].y) / model.anisotropy.y;
+                const dz = (point.z - samples[i].z) / model.anisotropy.z;
+                
+                const h = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                
+                // Covariance = palier - semivariance
+                const semivariance = calculateVariogramValue(h, model);
+                const cov = model.nugget + model.sill - semivariance;
+                
+                k.set([i, 0], cov);
+            }
+            
+            // Contrainte de biais nul
+            k.set([n, 0], 1);
+            
+            try {
+                // Résolution du système linéaire K.w = k
+                const w = math.lusolve(K, k);
+                
+                // Calcul de l'estimation
+                let estimate = 0;
+                for (let i = 0; i < n; i++) {
+                    estimate += w.get([i, 0]) * samples[i].value;
+                }
+                
+                // Calcul de la variance de krigeage
+                let variance = model.nugget + model.sill;
+                for (let i = 0; i < n; i++) {
+                    variance -= w.get([i, 0]) * k.get([i, 0]);
+                }
+                variance -= w.get([n, 0]) * k.get([n, 0]);
+                
+                return { estimate, variance };
+            } catch (error) {
+                // En cas de matrice singulière ou d'autres problèmes numériques,
+                // utiliser une méthode alternative (moyenne pondérée par l'inverse des distances)
+                let sumWeights = 0;
+                let sumWeightedValues = 0;
+                
+                for (const sample of samples) {
+                    const weight = sample.distance === 0 ? 
+                        Number.MAX_VALUE : 
+                        1 / Math.pow(sample.distance, 2);
+                    
+                    sumWeights += weight;
+                    sumWeightedValues += weight * sample.value;
+                }
+                
+                const estimate = sumWeightedValues / sumWeights;
+                return { estimate, variance: model.nugget + model.sill };
+            }
+        }
+        
+        function visualizeEstimatedBlockModel() {
+            if (blockModel.length === 0) return;
+            
+            const x = blockModel.map(b => b.x);
+            const y = blockModel.map(b => b.y);
+            const z = blockModel.map(b => b.z);
+            const values = blockModel.map(b => b.value);
+            
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const colors = values.map(value => getColorFromValue(value, min, max));
+            
+            blockModelPlot = {
+                type: 'scatter3d',
+                mode: 'markers',
+                x: x,
+                y: y,
+                z: z,
+                marker: {
+                    size: 5,
+                    color: colors,
+                    symbol: 'square',
+                    opacity: 0.7
+                },
+                text: values.map((v, i) => `Teneur: ${v.toFixed(3)}<br>Variance: ${blockModel[i].variance.toFixed(3)}`),
+                hoverinfo: 'text',
+                name: 'Blocs estimés'
+            };
+            
+            updateVisualization();
+        }
+        
+        function updateVisualization() {
+            const showComposites = document.getElementById('show-composites').checked;
+            const showEmptyBlocks = document.getElementById('show-empty-blocks').checked;
+            const showEstimatedBlocks = document.getElementById('show-estimated-blocks').checked;
+            const showEnvelope = document.getElementById('show-envelope').checked;
+            
+            const traces = [];
+            
+            if (showComposites && compositesPlot) traces.push(compositesPlot);
+            if (showEmptyBlocks && emptyBlocksPlot) traces.push(emptyBlocksPlot);
+            if (showEstimatedBlocks && blockModelPlot) traces.push(blockModelPlot);
+            if (showEnvelope && envelopePlot) traces.push(envelopePlot);
+            
+            const layout = {
+                margin: { l: 0, r: 0, b: 0, t: 0 },
+                scene: {
+                    xaxis: { title: 'X (m)' },
+                    yaxis: { title: 'Y (m)' },
+                    zaxis: { title: 'Z (m)' },
+                    aspectratio: { x: 1, y: 1, z: 1 },
+                    camera: { eye: { x: 1.5, y: 1.5, z: 1.2 } }
+                }
+            };
+            
+            Plotly.newPlot('model3D', traces, layout, { responsive: true });
+        }
+        
+        function updateBlockStats() {
+            if (blockModel.length === 0) return;
+            
+            const values = blockModel.map(b => b.value);
+            const stats = calculateStats(values);
+            
+            const table = document.getElementById('block-stats');
+            table.rows[1].cells[1].textContent = stats.count;
+            table.rows[2].cells[1].textContent = stats.min.toFixed(3);
+            table.rows[3].cells[1].textContent = stats.max.toFixed(3);
+            table.rows[4].cells[1].textContent = stats.mean.toFixed(3);
+            table.rows[5].cells[1].textContent = stats.median.toFixed(3);
+            table.rows[6].cells[1].textContent = stats.stdDev.toFixed(3);
+            table.rows[7].cells[1].textContent = stats.cv.toFixed(3);
+            
+            updateHistogram('block-histogram', values, 'Modèle de blocs');
+            
+            document.getElementById('total-blocks').textContent = stats.count;
+            document.getElementById('avg-grade').textContent = stats.mean.toFixed(3);
+            
+            const blockVolume = blockModel[0].sizeX * blockModel[0].sizeY * blockModel[0].sizeZ;
+            const totalVolume = blockModel.length * blockVolume;
+            document.getElementById('total-volume').textContent = totalVolume.toFixed(0);
+            
+            const density = parseFloat(document.getElementById('density').value);
+            const totalTonnage = totalVolume * density;
+            document.getElementById('total-tonnage').textContent = totalTonnage.toFixed(0);
+            
+            calculateTonnageGrade();
+        }
+        
+        function updateErrorStats(errors, variances) {
+            if (errors.length === 0 && variances.length === 0) return;
+            
+            // Même si nous n'avons pas d'erreurs (aucun composite coïncidant avec un bloc),
+            // nous pouvons toujours afficher les statistiques de variance
+            let errorStats = { mean: 0, stdDev: 0 };
+            if (errors.length > 0) {
+                errorStats = calculateStats(errors);
+            }
+            
+            const varianceStats = calculateStats(variances);
+            
+            document.getElementById('avg-error').textContent = errors.length > 0 ? errorStats.mean.toFixed(3) : "N/A";
+            document.getElementById('avg-stddev').textContent = errors.length > 0 ? errorStats.stdDev.toFixed(3) : "N/A";
+            document.getElementById('avg-kriging-variance').textContent = varianceStats.mean.toFixed(3);
+            
+            if (errors.length > 0) {
+                updateHistogram('error-histogram', errors, 'Erreurs d\'estimation');
+            }
+            
+            // Graphique de variance de krigeage
+            const canvasKV = document.getElementById('kriging-variance-chart');
+            const ctxKV = canvasKV.getContext('2d');
+            
+            if (krigingVarianceChart) krigingVarianceChart.destroy();
+            
+            // Créer des bins pour la variance
+            const min = Math.min(...variances);
+            const max = Math.max(...variances);
+            const range = max - min;
+            
+            const numBins = 20;
+            const binWidth = range / numBins;
+            
+            const bins = Array(numBins).fill(0);
+            const binLabels = [];
+            
+            for (let i = 0; i < numBins; i++) {
+                const binStart = min + i * binWidth;
+                const binEnd = min + (i + 1) * binWidth;
+                binLabels.push(`${binStart.toFixed(3)}-${binEnd.toFixed(3)}`);
+                
+                variances.forEach(v => {
+                    if (v >= binStart && v < binEnd) bins[i]++;
+                    if (v === max && i === numBins - 1) bins[i]++;
+                });
+            }
+            
+            krigingVarianceChart = new Chart(ctxKV, {
+                type: 'bar',
+                data: {
+                    labels: binLabels,
+                    datasets: [{
+                        label: 'Variance de krigeage',
+                        data: bins,
+                        backgroundColor: 'rgba(76, 175, 80, 0.6)',
+                        borderColor: 'rgba(76, 175, 80, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Fréquence' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Variance' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Tonnage-Teneur
+        function toggleCutoffInputs() {
+            const method = document.getElementById('cutoff-method').value;
+            document.getElementById('cutoff-single').classList.toggle('hidden', method === 'between');
+            document.getElementById('cutoff-range').classList.toggle('hidden', method !== 'between');
+        }
+        
+        function calculateTonnageGrade() {
+            if (blockModel.length === 0) return;
+            
+            const method = document.getElementById('cutoff-method').value;
+            let cutoffValue, cutoffMin, cutoffMax;
+            
+            if (method === 'between') {
+                cutoffMin = parseFloat(document.getElementById('cutoff-min').value);
+                cutoffMax = parseFloat(document.getElementById('cutoff-max').value);
+            } else {
+                cutoffValue = parseFloat(document.getElementById('cutoff-value').value);
+            }
+            
+            const density = parseFloat(document.getElementById('density').value);
+            const blockVolume = blockModel[0].sizeX * blockModel[0].sizeY * blockModel[0].sizeZ;
+            
+            const values = blockModel.map(b => b.value);
+            const minGrade = Math.min(...values);
+            const maxGrade = Math.max(...values);
+            
+            const step = (maxGrade - minGrade) / 20;
+            const cutoffs = [];
+            const tonnages = [];
+            const grades = [];
+            const metals = [];
+            
+            for (let cutoff = minGrade; cutoff <= maxGrade; cutoff += step) {
+                cutoffs.push(cutoff);
+                
+                let filteredBlocks;
+                
+                if (method === 'above') {
+                    filteredBlocks = blockModel.filter(b => b.value >= cutoff);
+                } else if (method === 'below') {
+                    filteredBlocks = blockModel.filter(b => b.value <= cutoff);
+                } else if (method === 'between') {
+                    filteredBlocks = blockModel.filter(b => b.value >= cutoffMin && b.value <= cutoffMax);
+                    if (cutoff > minGrade) continue;
+                }
+                
+                if (filteredBlocks.length === 0) {
+                    tonnages.push(0);
+                    grades.push(0);
+                    metals.push(0);
+                    continue;
+                }
+                
+                const tonnage = filteredBlocks.length * blockVolume * density;
+                const metal = filteredBlocks.reduce((sum, block) => sum + block.value * blockVolume * density, 0);
+                const grade = metal / tonnage;
+                
+                tonnages.push(tonnage);
+                grades.push(grade);
+                metals.push(metal);
+            }
+            
+            // Stockage pour l'export
+            tonnageGradeData = { cutoffs, tonnages, grades, metals, method };
+            
+            updateTonnageGradeCharts(cutoffs, tonnages, grades, metals, method);
+            updateTonnageTable(cutoffs, tonnages, grades, metals, method);
+        }
+        
+        function updateTonnageGradeCharts(cutoffs, tonnages, grades, metals, method) {
+            if (tonnageGradeChart) tonnageGradeChart.destroy();
+            if (metalContentChart) metalContentChart.destroy();
+            
+            const tonnageCtx = document.getElementById('tonnage-grade-chart').getContext('2d');
+            const metalCtx = document.getElementById('metal-content-chart').getContext('2d');
+            
+            if (method === 'between') {
+                tonnageGradeChart = new Chart(tonnageCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Résultat'],
+                        datasets: [
+                            {
+                                label: 'Tonnage',
+                                data: [tonnages[0]],
+                                backgroundColor: 'rgba(63, 81, 181, 0.6)',
+                                borderColor: 'rgba(63, 81, 181, 1)',
+                                borderWidth: 1,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Teneur moyenne',
+                                data: [grades[0]],
+                                backgroundColor: 'rgba(0, 188, 212, 0.6)',
+                                borderColor: 'rgba(0, 188, 212, 1)',
+                                borderWidth: 1,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Tonnage (t)' }
+                            },
+                            y1: {
+                                position: 'right',
+                                beginAtZero: true,
+                                title: { display: true, text: 'Teneur moyenne' },
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+                
+                metalContentChart = new Chart(metalCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Résultat'],
+                        datasets: [{
+                            label: 'Métal contenu',
+                            data: [metals[0]],
+                            backgroundColor: 'rgba(76, 175, 80, 0.6)',
+                            borderColor: 'rgba(76, 175, 80, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Métal contenu' }
+                            }
+                        }
+                    }
+                });
+            } else {
+                tonnageGradeChart = new Chart(tonnageCtx, {
+                    type: 'line',
+                    data: {
+                        labels: cutoffs.map(c => c.toFixed(2)),
+                        datasets: [
+                            {
+                                label: 'Tonnage',
+                                data: tonnages,
+                                backgroundColor: 'rgba(63, 81, 181, 0.2)',
+                                borderColor: 'rgba(63, 81, 181, 1)',
+                                borderWidth: 2,
+                                yAxisID: 'y',
+                                fill: true
+                            },
+                            {
+                                label: 'Teneur moyenne',
+                                data: grades,
+                                backgroundColor: 'rgba(0, 188, 212, 0.2)',
+                                borderColor: 'rgba(0, 188, 212, 1)',
+                                borderWidth: 2,
+                                yAxisID: 'y1',
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Tonnage (t)' }
+                            },
+                            y1: {
+                                position: 'right',
+                                beginAtZero: true,
+                                title: { display: true, text: 'Teneur moyenne' },
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+                
+                metalContentChart = new Chart(metalCtx, {
+                    type: 'line',
+                    data: {
+                        labels: cutoffs.map(c => c.toFixed(2)),
+                        datasets: [{
+                            label: 'Métal contenu',
+                            data: metals,
+                            backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                            borderColor: 'rgba(76, 175, 80, 1)',
+                            borderWidth: 2,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Métal contenu' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        function updateTonnageTable(cutoffs, tonnages, grades, metals, method) {
+            const tbody = document.querySelector('#tonnage-table tbody');
+            tbody.innerHTML = '';
+            
+            if (method === 'between') {
+                const cutoffMin = parseFloat(document.getElementById('cutoff-min').value);
+                const cutoffMax = parseFloat(document.getElementById('cutoff-max').value);
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="padding: 10px; border-bottom: 1px solid var(--border);">${cutoffMin.toFixed(2)} - ${cutoffMax.toFixed(2)}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid var(--border);">${tonnages[0].toFixed(0)}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid var(--border);">${grades[0].toFixed(3)}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid var(--border);">${metals[0].toFixed(0)}</td>
+                `;
+                tbody.appendChild(row);
+            } else {
+                // Afficher seulement quelques résultats pour ne pas surcharger la table
+                const numRows = Math.min(cutoffs.length, 20);
+                const step = Math.max(1, Math.floor(cutoffs.length / numRows));
+                
+                for (let i = 0; i < cutoffs.length; i += step) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td style="padding: 10px; border-bottom: 1px solid var(--border);">${cutoffs[i].toFixed(2)}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid var(--border);">${tonnages[i].toFixed(0)}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid var(--border);">${grades[i].toFixed(3)}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid var(--border);">${metals[i].toFixed(0)}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            }
+        }
+        
+        // Fonctions d'export
+        function exportModelCSV() {
+            if (blockModel.length === 0) {
+                alert("Aucun modèle de blocs à exporter.");
+                return;
+            }
+            
+            const header = "X,Y,Z,TENEUR,VARIANCE_KRIGEAGE,TAILLE_X,TAILLE_Y,TAILLE_Z\n";
+            
+            let csvContent = header;
+            
+            blockModel.forEach(block => {
+                csvContent += `${block.x},${block.y},${block.z},${block.value},${block.variance},${block.sizeX},${block.sizeY},${block.sizeZ}\n`;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", "modele_de_blocs_krigeage.csv");
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        function export3DPNG() {
+            Plotly.downloadImage('model3D', {
+                format: 'png',
+                width: 1200,
+                height: 800,
+                filename: 'modele_3d'
+            });
+        }
+        
+        function exportStatsPDF() {
+            if (blockModel.length === 0) {
+                alert("Aucune statistique à exporter.");
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            
+            // Titre
+            doc.setFontSize(16);
+            doc.text("Rapport d'estimation de ressources par krigeage", 105, 20, { align: 'center' });
+            
+            doc.setFontSize(12);
+            doc.text("MineEstim - Statistiques du modèle", 105, 30, { align: 'center' });
+            doc.setFontSize(10);
+            
+            // Date
+            const date = new Date().toLocaleDateString();
+            doc.text(`Date: ${date}`, 20, 40);
+            
+            // Statistiques générales
+            doc.setFontSize(12);
+            doc.text("Résumé", 20, 50);
+            doc.setFontSize(10);
+            
+            const blockVolume = blockModel[0].sizeX * blockModel[0].sizeY * blockModel[0].sizeZ;
+            const totalVolume = blockModel.length * blockVolume;
+            const density = parseFloat(document.getElementById('density').value);
+            const totalTonnage = totalVolume * density;
+            
+            const values = blockModel.map(b => b.value);
+            const stats = calculateStats(values);
+            
+            doc.text(`Nombre total de blocs: ${stats.count}`, 30, 60);
+            doc.text(`Volume total: ${totalVolume.toFixed(0)} m³`, 30, 68);
+            doc.text(`Tonnage total: ${totalTonnage.toFixed(0)} t`, 30, 76);
+            doc.text(`Teneur moyenne: ${stats.mean.toFixed(3)}`, 30, 84);
+            
+            // Paramètres de krigeage
+            doc.setFontSize(12);
+            doc.text("Paramètres de krigeage", 20, 100);
+            doc.setFontSize(10);
+            
+            const blockSizeX = parseFloat(document.getElementById('block-size-x').value);
+            const blockSizeY = parseFloat(document.getElementById('block-size-y').value);
+            const blockSizeZ = parseFloat(document.getElementById('block-size-z').value);
+            
+            doc.text(`Taille des blocs: ${blockSizeX} × ${blockSizeY} × ${blockSizeZ} m`, 30, 110);
+            doc.text(`Modèle de variogramme: ${variogramModel.type}`, 30, 118);
+            doc.text(`Effet pépite: ${variogramModel.nugget.toFixed(3)}`, 30, 126);
+            doc.text(`Palier: ${variogramModel.sill.toFixed(3)}`, 30, 134);
+            doc.text(`Portée: ${variogramModel.range.toFixed(1)} m`, 30, 142);
+            doc.text(`Anisotropie: X=${variogramModel.anisotropy.x}, Y=${variogramModel.anisotropy.y}, Z=${variogramModel.anisotropy.z}`, 30, 150);
+            doc.text(`Densité: ${density} t/m³`, 30, 158);
+            
+            // Statistiques détaillées
+            doc.addPage();
+            doc.setFontSize(12);
+            doc.text("Statistiques détaillées", 20, 20);
+            doc.setFontSize(10);
+            
+            // Table composites
+            doc.text("Composites", 30, 30);
+            doc.line(30, 32, 180, 32);
+            doc.text("Paramètre", 30, 38);
+            doc.text("Valeur", 100, 38);
+            doc.line(30, 40, 180, 40);
+            
+            const compValues = composites.map(c => c.VALUE);
+            const compStats = calculateStats(compValues);
+            
+            let y = 46;
+            doc.text("Nombre d'échantillons", 30, y); doc.text(compStats.count.toString(), 100, y); y += 8;
+            doc.text("Minimum", 30, y); doc.text(compStats.min.toFixed(3), 100, y); y += 8;
+            doc.text("Maximum", 30, y); doc.text(compStats.max.toFixed(3), 100, y); y += 8;
+            doc.text("Moyenne", 30, y); doc.text(compStats.mean.toFixed(3), 100, y); y += 8;
+            doc.text("Médiane", 30, y); doc.text(compStats.median.toFixed(3), 100, y); y += 8;
+            doc.text("Écart-type", 30, y); doc.text(compStats.stdDev.toFixed(3), 100, y); y += 8;
+            doc.text("CV", 30, y); doc.text(compStats.cv.toFixed(3), 100, y); y += 8;
+            
+            // Table blocks
+            y = 110;
+            doc.text("Modèle de blocs", 30, y);
+            doc.line(30, y + 2, 180, y + 2);
+            doc.text("Paramètre", 30, y + 8);
+            doc.text("Valeur", 100, y + 8);
+            doc.line(30, y + 10, 180, y + 10);
+            
+            y += 16;
+            doc.text("Nombre de blocs", 30, y); doc.text(stats.count.toString(), 100, y); y += 8;
+            doc.text("Minimum", 30, y); doc.text(stats.min.toFixed(3), 100, y); y += 8;
+            doc.text("Maximum", 30, y); doc.text(stats.max.toFixed(3), 100, y); y += 8;
+            doc.text("Moyenne", 30, y); doc.text(stats.mean.toFixed(3), 100, y); y += 8;
+            doc.text("Médiane", 30, y); doc.text(stats.median.toFixed(3), 100, y); y += 8;
+            doc.text("Écart-type", 30, y); doc.text(stats.stdDev.toFixed(3), 100, y); y += 8;
+            doc.text("CV", 30, y); doc.text(stats.cv.toFixed(3), 100, y); y += 8;
+            
+            // Erreurs de krigeage
+            doc.addPage();
+            doc.setFontSize(12);
+            doc.text("Erreurs d'estimation", 20, 20);
+            doc.setFontSize(10);
+            
+            const errorElement = document.getElementById('avg-error');
+            const stddevElement = document.getElementById('avg-stddev');
+            const varianceElement = document.getElementById('avg-kriging-variance');
+            
+            y = 30;
+            doc.text("Erreur moyenne:", 30, y); 
+            doc.text(errorElement ? errorElement.textContent : "N/A", 100, y); 
+            y += 8;
+            
+            doc.text("Écart-type d'erreur:", 30, y); 
+            doc.text(stddevElement ? stddevElement.textContent : "N/A", 100, y); 
+            y += 8;
+            
+            doc.text("Variance de krigeage moyenne:", 30, y); 
+            doc.text(varianceElement ? varianceElement.textContent : "N/A", 100, y); 
+            y += 8;
+            
+            doc.setFontSize(8);
+            doc.text("Rapport généré par MineEstim - www.mineestim.com", 105, 280, { align: 'center' });
+            
+            doc.save("statistiques_krigeage.pdf");
+        }
+        
+        function exportTonnageXLSX() {
+            if (blockModel.length === 0 || tonnageGradeData.cutoffs.length === 0) {
+                alert("Aucune donnée de tonnage-teneur à exporter.");
+                return;
+            }
+            
+            const { cutoffs, tonnages, grades, metals, method } = tonnageGradeData;
+            
+            const wb = XLSX.utils.book_new();
+            
+            // Créer feuille pour les données
+            const data = [];
+            
+            // Entête
+            data.push(["Teneur de coupure", "Tonnage (t)", "Teneur moyenne", "Métal contenu"]);
+            
+            // Données
+            if (method === 'between') {
+                const cutoffMin = parseFloat(document.getElementById('cutoff-min').value);
+                const cutoffMax = parseFloat(document.getElementById('cutoff-max').value);
+                data.push([`${cutoffMin.toFixed(2)} - ${cutoffMax.toFixed(2)}`, tonnages[0], grades[0], metals[0]]);
+            } else {
+                for (let i = 0; i < cutoffs.length; i++) {
+                    data.push([cutoffs[i], tonnages[i], grades[i], metals[i]]);
+                }
+            }
+            
+            // Informations sur la méthode utilisée
+            data.push([]);
+            data.push(["Méthode de coupure", method === 'above' ? "Teneur ≥ Coupure" : method === 'below' ? "Teneur ≤ Coupure" : "Entre deux teneurs"]);
+            data.push(["Méthode d'estimation", "Krigeage ordinaire"]);
+            data.push(["Taille des blocs (m)", `${blockModel[0].sizeX} × ${blockModel[0].sizeY} × ${blockModel[0].sizeZ}`]);
+            data.push(["Densité (t/m³)", parseFloat(document.getElementById('density').value)]);
+            data.push(["Modèle de variogramme", variogramModel.type]);
+            data.push(["Effet pépite", variogramModel.nugget]);
+            data.push(["Palier", variogramModel.sill]);
+            data.push(["Portée (m)", variogramModel.range]);
+            data.push(["Date d'exportation", new Date().toLocaleDateString()]);
+            
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            
+            // Ajouter la feuille au classeur
+            XLSX.utils.book_append_sheet(wb, ws, "Tonnage-Teneur");
+            
+            // Générer le fichier Excel
+            XLSX.writeFile(wb, "tonnage_teneur_krigeage.xlsx");
+        }
+        
+        function exportTonnagePDF() {
+            if (blockModel.length === 0 || tonnageGradeData.cutoffs.length === 0) {
+                alert("Aucune donnée de tonnage-teneur à exporter.");
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            
+            const { cutoffs, tonnages, grades, metals, method } = tonnageGradeData;
+            
+            // Titre
+            doc.setFontSize(16);
+            doc.text("Rapport Tonnage-Teneur (Krigeage)", 105, 20, { align: 'center' });
+            
+            doc.setFontSize(12);
+            doc.text("MineEstim - Résultats d'estimation", 105, 30, { align: 'center' });
+            doc.setFontSize(10);
+            
+            // Date
+            const date = new Date().toLocaleDateString();
+            doc.text(`Date: ${date}`, 20, 40);
+            
+            // Méthode
+            doc.setFontSize(12);
+            doc.text("Paramètres", 20, 50);
+            doc.setFontSize(10);
+            
+            const methodText = method === 'above' ? "Teneur ≥ Coupure" : 
+                               method === 'below' ? "Teneur ≤ Coupure" : 
+                               "Entre deux teneurs";
+            
+            doc.text(`Méthode d'estimation: Krigeage ordinaire`, 30, 60);
+            doc.text(`Méthode de coupure: ${methodText}`, 30, 68);
+            doc.text(`Taille des blocs: ${blockModel[0].sizeX} × ${blockModel[0].sizeY} × ${blockModel[0].sizeZ} m`, 30, 76);
+            doc.text(`Densité: ${parseFloat(document.getElementById('density').value)} t/m³`, 30, 84);
+            doc.text(`Modèle de variogramme: ${variogramModel.type}`, 30, 92);
+            doc.text(`Effet pépite: ${variogramModel.nugget.toFixed(3)}`, 30, 100);
+            doc.text(`Palier: ${variogramModel.sill.toFixed(3)}`, 30, 108);
+            doc.text(`Portée: ${variogramModel.range.toFixed(1)} m`, 30, 116);
+            
+            // Tableau de résultats
+            doc.setFontSize(12);
+            doc.text("Résultats de tonnage-teneur", 20, 130);
+            doc.setFontSize(10);
+            
+            doc.line(20, 133, 190, 133);
+            doc.text("Coupure", 20, 140);
+            doc.text("Tonnage (t)", 70, 140);
+            doc.text("Teneur", 120, 140);
+            doc.text("Métal", 160, 140);
+            doc.line(20, 142, 190, 142);
+            
+            let y = 148;
+            
+            if (method === 'between') {
+                const cutoffMin = parseFloat(document.getElementById('cutoff-min').value);
+                const cutoffMax = parseFloat(document.getElementById('cutoff-max').value);
+                
+                doc.text(`${cutoffMin.toFixed(2)} - ${cutoffMax.toFixed(2)}`, 20, y);
+                doc.text(tonnages[0].toFixed(0), 70, y);
+                doc.text(grades[0].toFixed(3), 120, y);
+                doc.text(metals[0].toFixed(0), 160, y);
+                
+                y += 8;
+            } else {
+                // Limiter à 20 lignes maximum
+                const numRows = Math.min(cutoffs.length, 20);
+                const step = Math.max(1, Math.floor(cutoffs.length / numRows));
+                
+                for (let i = 0; i < cutoffs.length; i += step) {
+                    doc.text(cutoffs[i].toFixed(2), 20, y);
+                    doc.text(tonnages[i].toFixed(0), 70, y);
+                    doc.text(grades[i].toFixed(3), 120, y);
+                    doc.text(metals[i].toFixed(0), 160, y);
+                    
+                    y += 8;
+                    
+                    if (y > 270) {
+                        doc.addPage();
+                        
+                        doc.setFontSize(12);
+                        doc.text("Résultats de tonnage-teneur (suite)", 20, 20);
+                        doc.setFontSize(10);
+                        
+                        doc.line(20, 23, 190, 23);
+                        doc.text("Coupure", 20, 30);
+                        doc.text("Tonnage (t)", 70, 30);
+                        doc.text("Teneur", 120, 30);
+                        doc.text("Métal", 160, 30);
+                        doc.line(20, 32, 190, 32);
+                        
+                        y = 40;
+                    }
+                }
+            }
+            
+            doc.setFontSize(8);
+            doc.text("Rapport généré par MineEstim - www.mineestim.com", 105, 280, { align: 'center' });
+            
+            doc.save("tonnage_teneur_krigeage.pdf");
+        }
+        
+        // Fonctions utilitaires
+        function showSuccess(message) {
+            const alert = document.getElementById('file-loaded');
+            alert.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+            alert.classList.remove('hidden');
+            document.getElementById('file-error').classList.add('hidden');
+        }
+        
+        function showError(message) {
+            const alert = document.getElementById('file-error');
+            alert.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+            alert.classList.remove('hidden');
+            document.getElementById('file-loaded').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
